@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#FFFFFF">
+  <meta name="description" content="오늘의 학식 — 학교 식당 메뉴를 확인하고 날짜별 식단을 관리하는 체험용 서비스">
+  <title>오늘의 학식 — 학교 식당 메뉴를 한눈에</title>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.7/babel.min.js"></script>
+  <script src="https://unpkg.com/lucide@0.577.0"></script>
+
+  <script type="importmap">
+    {
+      "imports": {
+        "react": "data:text/javascript,const React=window.React;export default React;export const {Children,Component,Fragment,PureComponent,StrictMode,Suspense,cloneElement,createContext,createElement,createFactory,createRef,forwardRef,isValidElement,lazy,memo,startTransition,useCallback,useContext,useDebugValue,useDeferredValue,useEffect,useId,useImperativeHandle,useInsertionEffect,useLayoutEffect,useMemo,useReducer,useRef,useState,useSyncExternalStore,useTransition,version}=React;",
+        "lucide-react": "https://esm.sh/lucide-react@0.577.0?external=react"
+      }
+    }
+  </script>
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: '#0071E3',
+            ink: '#1D1D1F',
+            body: '#424245',
+            muted: '#66666D',
+            paper: '#FFFFFF',
+            surface: '#F5F5F7',
+            line: '#E5E5EA'
+          },
+          fontFamily: {
+            sans: [
+              '-apple-system',
+              'BlinkMacSystemFont',
+              '"Apple SD Gothic Neo"',
+              '"Malgun Gothic"',
+              'sans-serif'
+            ]
+          },
+          boxShadow: {
+            soft: '0 4px 20px rgba(29,29,31,0.035)'
+          }
+        }
+      }
+    };
+  </script>
+
+  <style>
+    body {
+      margin: 0;
+      -webkit-font-smoothing: antialiased;
+      overflow-wrap: anywhere;
+    }
+
+    :where(a, button):focus-visible {
+      outline: 3px solid #0071E3;
+      outline-offset: 4px;
+    }
+
+    a {
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .entry-link {
+      transition: border-color .18s, background-color .18s;
+    }
+
+    .entry-link:hover {
+      border-color: #A7C9EC;
+      background-color: #F7FAFE;
+    }
+
+    .startup-message {
+      max-width: 520px;
+      margin: 64px auto;
+      padding: 24px;
+      font-family: -apple-system, BlinkMacSystemFont,
+        "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+      color: #424245;
+      line-height: 1.8;
+    }
+
+    #main-content {
+      scroll-margin-top: 180px;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        scroll-behavior: auto !important;
+        transition: none !important;
+        animation: none !important;
+      }
+    }
+  </style>
+<style data-weeai-img>
+img[data-img-query]:not([src]){visibility:hidden}
+img[data-img-pending]{background:linear-gradient(90deg,rgba(128,128,128,.14) 25%,rgba(128,128,128,.26) 37%,rgba(128,128,128,.14) 63%);background-size:400% 100%;animation:weeai-img-shimmer 1.4s ease infinite}
+img[data-img-fadein]{animation:weeai-img-fade .35s ease-out}
+@keyframes weeai-img-shimmer{0%{background-position:100% 50%}100%{background-position:0 50%}}
+@keyframes weeai-img-fade{from{opacity:0}to{opacity:1}}
+@media (prefers-reduced-motion:reduce){img[data-img-pending],img[data-img-fadein]{animation:none}}
+</style>
+<script data-edit-script="true" data-weeai-img>
+(function(){
+  if (window.__weeaiImg) return; window.__weeaiImg = 1;
+  var MAP = {};
+  var BRIDGE = false;
+  var asked = {};
+  function seed(q){ return String(q || 'fallback').toLowerCase().replace(/[^a-z0-9가-힣]+/g, '-').slice(0, 32) || 'fallback'; }
+  function fallback(q, w, h){ return 'https://picsum.photos/seed/' + encodeURIComponent(seed(q)) + '/' + w + '/' + h; }
+  function box(img){
+    // 배치 크기(offset)를 먼저 — 모션 무대는 화면에 맞추려고 통째로 줄여 그려서 화면상 크기(rect)는 실제의 절반쯤이다
+    var r = img.getBoundingClientRect();
+    var w = img.offsetWidth || Math.round(r.width) || 600, h = img.offsetHeight || Math.round(r.height) || Math.round(w * 2 / 3);
+    return { w: Math.min(Math.max(w * 2, 400), 2000), h: Math.min(Math.max(h * 2, 300), 2000) };
+  }
+  var BLANK = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+  // 검색 응답을 기다리는 동안: 투명 임시 이미지 + 반짝임(깨진 아이콘·대체 문구가 보이지 않게)
+  function hold(img){
+    if (img.getAttribute('data-img-pending')) return;
+    img.setAttribute('data-img-pending', '1');
+    if (!img.getAttribute('src')) img.setAttribute('src', BLANK);
+  }
+  // 진짜 사진이 다 받아지면 반짝임을 끄고 살짝 나타나게 한다
+  function settle(img){
+    img.removeAttribute('data-img-pending');
+    img.setAttribute('data-img-fadein', '1');
+  }
+  function apply(img, hit){
+    if (!hit || !hit.url) return;
+    hold(img);
+    img.addEventListener('load', function onLoad(){ if (img.getAttribute('src') === BLANK) return; img.removeEventListener('load', onLoad); settle(img); });
+    img.setAttribute('src', hit.url);
+    img.setAttribute('data-img-resolved', '1');
+    if (hit.author && !img.getAttribute('title')) img.setAttribute('title', 'Photo: ' + hit.author + (hit.provider ? ' / ' + hit.provider : ''));
+    if (hit.link) img.setAttribute('data-img-credit', hit.link);
+  }
+  function scan(){
+    var imgs = document.querySelectorAll('img[data-img-query]:not([data-img-resolved])');
+    var ask = [];
+    for (var i = 0; i < imgs.length; i++) {
+      var img = imgs[i];
+      var q = (img.getAttribute('data-img-query') || '').trim();
+      if (!q) continue;
+      if (MAP[q]) { apply(img, MAP[q]); continue; }
+      hold(img);
+      var b = box(img);
+      if (!BRIDGE) { apply(img, { url: fallback(q, b.w, b.h) }); continue; }
+      if (!asked[q]) { asked[q] = 1; ask.push({ q: q, w: b.w, h: b.h }); }
+    }
+    if (ask.length) parent.postMessage({ type: 'weeai-img-query', items: ask }, '*');
+  }
+  var timer = null;
+  function later(){ if (timer) return; timer = setTimeout(function(){ timer = null; scan(); }, 60); }
+  window.addEventListener('message', function(e){
+    var d = e.data;
+    if (!d || d.type !== 'weeai-img-result' || !d.map) return;
+    for (var k in d.map) MAP[k] = d.map[k];
+    scan();
+  });
+  document.addEventListener('error', function(e){
+    var el = e.target;
+    if (!el || el.tagName !== 'IMG' || el.getAttribute('data-img-fallback')) return;
+    el.setAttribute('data-img-fallback', '1');
+    el.removeAttribute('data-img-pending');
+    var b = box(el);
+    el.setAttribute('src', fallback(el.getAttribute('data-img-query') || el.getAttribute('alt') || el.getAttribute('src'), b.w, b.h));
+  }, true);
+  function start(){
+    scan();
+    new MutationObserver(later).observe(document.documentElement, { subtree: true, childList: true, attributes: true, attributeFilter: ['data-img-query'] });
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start); else start();
+})();
+</script>
+</head>
+
+<body class="bg-paper font-sans text-base leading-relaxed text-body">
+  <div id="root">
+    <div class="startup-message" role="status">
+      <strong>오늘의 학식을 불러오는 중…</strong>
+      <p>
+        화면이 계속 표시되면 인터넷 연결을 확인한 후 새로고침해 주세요.
+      </p>
+      <p>
+        <a href="./student.html">학생 보기로 이동</a>
+        ·
+        <a href="./menumanage.html">메뉴 관리로 이동</a>
+      </p>
+    </div>
+  </div>
+
+  <noscript>
+    <div class="startup-message">
+      <p>서비스 화면을 이용하려면 JavaScript를 허용해 주세요.</p>
+      <p>
+        <a href="./student.html">학생 보기</a>
+        ·
+        <a href="./menumanage.html">메뉴 관리</a>
+      </p>
+    </div>
+  </noscript>
+
+  <script type="text/babel" data-type="module" data-presets="react">
+    // Lucide 아이콘 컴포넌트 헬퍼
+    const createLucideIcon = (iconName) => {
+      return ({ className = '', size = 24, strokeWidth = 2, ...props }) => {
+        const ref = React.useRef(null);
+        React.useEffect(() => {
+          if (ref.current && typeof lucide !== 'undefined' && lucide[iconName]) {
+            ref.current.innerHTML = '';
+            const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+            const iconNode = lucide.createElement(lucide[iconName]);
+            svg.innerHTML = iconNode.innerHTML;
+            Array.from(iconNode.attributes).forEach(attr => {
+              svg.setAttribute(attr.name, attr.value);
+            });
+            if (className) svg.setAttribute('class', className);
+            svg.setAttribute('width', size);
+            svg.setAttribute('height', size);
+            svg.setAttribute('stroke-width', strokeWidth);
+            ref.current.appendChild(svg);
+          }
+        }, [className, size, strokeWidth]);
+        return React.createElement('span', {
+          ref,
+          style: { display: 'inline-flex', alignItems: 'center', justifyContent: 'center' },
+          ...props
+        });
+      };
+    };
+    const Grid = createLucideIcon('Grid');
+    const Info = createLucideIcon('Info');
+    const ArrowRight = createLucideIcon('ArrowRight');
+    const Calendar = createLucideIcon('Calendar');
+    const Edit = createLucideIcon('Edit');
+    const Sun = createLucideIcon('Sun');
+    const Cloud = createLucideIcon('Cloud');
+    const Moon = createLucideIcon('Moon');
+    const Database = createLucideIcon('Database');
+    const ChevronRight = createLucideIcon('ChevronRight');
+
+    
+
+    const previewMeals = [
+      {
+        label: '조식',
+        title: '소고기 야채죽',
+        description: '메추리알 장조림 · 오이무침',
+        price: 3500,
+        Icon: Sun
+      },
+      {
+        label: '중식',
+        title: '제육볶음 한 상',
+        description: '잡곡밥 · 미역국 · 콩나물무침',
+        price: 5500,
+        Icon: Cloud
+      },
+      {
+        label: '석식',
+        title: '닭갈비 덮밥',
+        description: '팽이버섯 된장국 · 깍두기',
+        price: 5000,
+        Icon: Moon
+      }
+    ];
+
+    const numberFormatter = new Intl.NumberFormat('ko-KR');
+
+    function Header() {
+      return (
+        <header className="sticky top-0 z-50 border-b border-line bg-white">
+          <div className="border-b border-line bg-surface">
+            <div className="mx-auto flex max-w-[1200px] items-start justify-center gap-2 px-5 py-2.5 text-center text-xs text-body">
+              <Info
+                className="mt-0.5 h-3.5 w-3.5 shrink-0"
+                aria-hidden="true"
+              />
+              <p>
+                체험용 서비스입니다. 데이터는 현재 브라우저에만 저장됩니다.
+              </p>
+            </div>
+          </div>
+
+          <div className="mx-auto flex max-w-[1200px] flex-col gap-4 px-5 py-4 sm:flex-row sm:items-center sm:justify-between lg:px-8">
+            <a
+              href="./index.html"
+              aria-label="오늘의 학식 홈"
+              aria-current="page"
+              className="flex min-w-0 items-center gap-3 self-start rounded-xl hover:opacity-80"
+            >
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[13px] bg-brand text-white">
+                <Grid className="h-5 w-5" aria-hidden="true" />
+              </div>
+              <div>
+                <p className="text-lg font-bold tracking-tight text-ink">
+                  오늘의 학식
+                </p>
+                <p className="text-xs text-muted">
+                  학교 식당 메뉴 안내
+                </p>
+              </div>
+            </a>
+
+            <nav
+              aria-label="주요 메뉴"
+              className="grid w-full grid-cols-2 gap-1 rounded-[14px] bg-surface p-1 sm:w-auto sm:min-w-[240px]"
+            >
+              <a
+                href="./student.html"
+                className="flex min-h-[44px] items-center justify-center rounded-[10px] px-5 py-2 text-sm font-medium text-body transition-colors hover:bg-white hover:text-brand"
+              >
+                학생 보기
+              </a>
+              <a
+                href="./menumanage.html"
+                className="flex min-h-[44px] items-center justify-center rounded-[10px] px-5 py-2 text-sm font-medium text-body transition-colors hover:bg-white hover:text-brand"
+              >
+                메뉴 관리
+              </a>
+            </nav>
+          </div>
+        </header>
+      );
+    }
+
+    function MealPreview() {
+      return (
+        <figure className="min-w-0 rounded-[28px] bg-surface p-4 sm:p-6">
+          <figcaption className="mb-5 flex items-center justify-between gap-3 px-1">
+            <div className="flex items-center gap-2 text-sm font-semibold text-ink">
+              <Calendar className="h-4 w-4 text-brand" aria-hidden="true" />
+              하루 식단 미리보기
+            </div>
+            <span className="text-xs text-muted">샘플 메뉴</span>
+          </figcaption>
+
+          <div className="overflow-hidden rounded-2xl border border-line bg-white shadow-soft">
+            {previewMeals.map(({ label, title, description, price, Icon }, index) => (
+              <div
+                key={label}
+                className={`flex items-start gap-3 p-4 sm:gap-4 sm:p-5 ${
+                  index > 0 ? 'border-t border-line' : ''
+                }`}
+              >
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-surface text-body">
+                  <Icon className="h-5 w-5" aria-hidden="true" />
+                </div>
+
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs text-muted">{label}</p>
+                  <p className="mt-1 font-semibold tracking-tight text-ink">
+                    {title}
+                  </p>
+                  <p className="mt-1 text-xs leading-relaxed text-muted">
+                    {description}
+                  </p>
+                  <p className="mt-2 text-sm font-medium tabular-nums text-body">
+                    {numberFormatter.format(price)}원
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <p className="mt-4 px-1 text-xs leading-relaxed text-muted">
+            화면 이해를 위한 예시이며, 실제 등록된 식단은 학생 보기에서 확인할 수 있습니다.
+          </p>
+        </figure>
+      );
+    }
+
+    function App() {
+      return (
+        <div>
+          <a
+            href="#main-content"
+            className="sr-only z-[60] rounded-xl bg-white px-5 py-3 text-brand shadow-soft focus:not-sr-only focus:fixed focus:left-4 focus:top-4"
+          >
+            본문으로 바로가기
+          </a>
+
+          <Header />
+
+          <main
+            id="main-content"
+            className="mx-auto w-full max-w-[1200px] px-5 lg:px-8"
+          >
+            <section className="grid items-center gap-10 py-12 md:grid-cols-2 md:gap-12 md:py-20">
+              <div className="min-w-0">
+                <p className="mb-4 text-sm font-semibold text-brand">
+                  매일 만나는 든든함
+                </p>
+
+                <h1 className="break-keep text-4xl font-bold leading-[1.25] tracking-tight text-ink lg:text-5xl">
+                  오늘 뭐 먹지?<br />
+                  학식부터 확인해요.
+                </h1>
+
+                <p className="mt-5 max-w-[32em] break-keep text-base leading-relaxed text-muted">
+                  조식부터 석식까지, 날짜별 학교 식당 메뉴를 한눈에.
+                  식단 확인과 메뉴 관리를 한곳에서 간편하게 이용하세요.
+                </p>
+
+                <div className="mt-7 flex flex-wrap items-center gap-3">
+                  <a
+                    href="./student.html"
+                    className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-xl bg-brand px-5 text-sm font-semibold text-white transition-colors hover:bg-[#0062C5] active:scale-[0.98]"
+                  >
+                    식단 확인하기
+                    <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                  </a>
+                  <a
+                    href="./menumanage.html"
+                    className="inline-flex min-h-[48px] items-center justify-center gap-1 rounded-xl px-4 text-sm font-medium text-brand transition-colors hover:bg-surface"
+                  >
+                    메뉴 관리하기
+                    <ChevronRight className="h-4 w-4" aria-hidden="true" />
+                  </a>
+                </div>
+              </div>
+
+              <MealPreview />
+            </section>
+
+            <section
+              aria-labelledby="entry-title"
+              className="border-t border-line py-10 md:py-12"
+            >
+              <div className="mb-6">
+                <h2
+                  id="entry-title"
+                  className="text-2xl font-bold tracking-tight text-ink"
+                >
+                  필요한 화면으로 바로 이동하세요.
+                </h2>
+                <p className="mt-2 text-sm text-muted">
+                  별도의 로그인 없이 식단 조회와 메뉴 관리를 체험할 수 있습니다.
+                </p>
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <a
+                  href="./student.html"
+                  aria-labelledby="student-entry-title"
+                  className="entry-link group flex min-w-0 items-start gap-4 rounded-[24px] border border-line p-5 sm:p-7"
+                >
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[14px] bg-surface text-brand">
+                    <Calendar className="h-5 w-5" aria-hidden="true" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <h3
+                      id="student-entry-title"
+                      className="text-lg font-semibold text-ink"
+                    >
+                      학생 보기
+                    </h3>
+                    <p className="mt-2 break-keep text-sm leading-relaxed text-muted">
+                      원하는 날짜의 조식·중식·석식과 메뉴 구성,
+                      가격, 알레르기 안내를 확인하세요.
+                    </p>
+                    <span className="mt-5 inline-flex min-h-[24px] items-center gap-2 text-sm font-medium text-brand">
+                      식단 보러 가기
+                      <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                    </span>
+                  </div>
+                </a>
+
+                <a
+                  href="./menumanage.html"
+                  aria-labelledby="manage-entry-title"
+                  className="entry-link group flex min-w-0 items-start gap-4 rounded-[24px] border border-line p-5 sm:p-7"
+                >
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[14px] bg-surface text-brand">
+                    <Edit className="h-5 w-5" aria-hidden="true" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <h3
+                      id="manage-entry-title"
+                      className="text-lg font-semibold text-ink"
+                    >
+                      메뉴 관리
+                    </h3>
+                    <p className="mt-2 break-keep text-sm leading-relaxed text-muted">
+                      날짜와 식사 구분별로 식단을 조회하고,
+                      메뉴를 등록·수정·삭제하세요.
+                    </p>
+                    <span className="mt-5 inline-flex min-h-[24px] items-center gap-2 text-sm font-medium text-brand">
+                      식단 관리하러 가기
+                      <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                    </span>
+                  </div>
+                </a>
+              </div>
+            </section>
+
+            <aside
+              aria-labelledby="storage-title"
+              className="mb-12 flex items-start gap-3 rounded-2xl bg-surface p-5 md:p-6"
+            >
+              <Database
+                className="mt-0.5 h-5 w-5 shrink-0 text-muted"
+                aria-hidden="true"
+              />
+              <div className="min-w-0">
+                <h2
+                  id="storage-title"
+                  className="text-sm font-semibold text-ink"
+                >
+                  데이터는 이 브라우저에만 저장됩니다.
+                </h2>
+                <p className="mt-2 max-w-[65em] text-sm leading-relaxed text-muted">
+                  같은 주소에서 이용하는 학생 보기와 메뉴 관리는 저장된 식단을 함께 사용합니다.
+                  다른 브라우저나 기기와는 공유되지 않으며, 브라우저의 사이트 데이터를
+                  삭제하면 식단도 삭제될 수 있습니다. 메뉴 관리는 체험용 화면으로,
+                  관리자 인증이나 접근 제한 기능은 제공하지 않습니다.
+                </p>
+              </div>
+            </aside>
+          </main>
+
+          <footer className="border-t border-line">
+            <div className="mx-auto flex max-w-[1200px] flex-col justify-between gap-4 px-5 py-6 sm:flex-row sm:items-center lg:px-8">
+              <div>
+                <p className="text-sm font-semibold text-ink">오늘의 학식</p>
+                <p className="mt-1 text-xs text-muted">
+                  하루 세 끼, 학교 식당 메뉴를 한눈에.
+                </p>
+              </div>
+              <p className="text-xs text-muted">
+                샘플 식단과 알레르기 정보는 데모 예시입니다.
+              </p>
+            </div>
+          </footer>
+        </div>
+      );
+    }
+
+    window.ReactDOM.createRoot(
+      document.getElementById('root')
+    ).render(<App />);
+  </script>
+</body>
+</html>
